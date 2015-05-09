@@ -1,0 +1,27 @@
+{
+  "name": "gapless.js",
+  "version": "1.0.0",
+  "description": "Gapless audio playback using HTMLAudioElement and the Web Audio API",
+  "main": "gapless.js",
+  "dependencies": {
+    "typescript": "^1.5.0-beta",
+    "uglify-js": "^2.4.21"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "uglify": "./node_modules/.bin/uglifyjs --compress --mangle --source-map gapless.min.js -o gapless.min.js -- gapless.js",
+    "compile": "./node_modules/.bin/tsc --sourceMap gapless.ts",
+    "prepare-release" : "npm run-script compile && npm run-script uglify"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/alecgorge/gapless.js.git"
+  },
+  "author": "Alec Gorge <alecgorge@gmail.com>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/alecgorge/gapless.js/issues"
+  },
+  "homepage": "https://github.com/alecgorge/gapless.js"
+}
