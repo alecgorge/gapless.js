@@ -245,6 +245,7 @@ class GaplessTrack {
         var request : XMLHttpRequest = new XMLHttpRequest();
         request.open('get', this.url, true);
         request.responseType = 'arraybuffer';
+        request.setRequestHeader("Range", "bytes=-" + 1024 * 1024); // request the last 500KB
         request.onload = () => {
             context.decodeAudioData(request.response, (buffer : AudioBuffer) => {
                 cb(buffer);
@@ -271,10 +272,11 @@ class GaplessTrack {
 
         this.currentSourceNode = this.makeNewSourceNode();
 
-        console.log("context: %f, audio: %f", this.context.currentTime, this.getAudio().currentTime);
         this.bufferStartTime = this.context.currentTime;
         this.bufferStartOffsetFromHTMLAudio = this.getAudio().currentTime;
-        this.currentSourceNode.start(0, this.getAudio().currentTime);
+
+        console.log("current time %f/%f, switch at: %f (%f)", this.getAudio().currentTime, this.getAudio().duration, this.switchToWebAudioAt, this.getFullBuffer().duration);
+        this.currentSourceNode.start(0, this.getAudio().currentTime - this.switchToWebAudioAt);
         this.getAudio().pause();
         this.clearAudio();
 
@@ -289,15 +291,23 @@ class GaplessTrack {
         }
     }
 
+    private switchToWebAudioAt : number = Math.pow(2, 53) - 1; // a very large number
+    private switchingCheckInterval : number = -1;
     private attemptSwitchToWebAudio() {
+        this.switchToWebAudioAt = this.getAudio().duration - this.getFullBuffer().duration;
+
         // we can't switch to web audio unless we have actually played
         // the HTML5 audio for a few seconds to avoid the blip
-        this.debug("attempting to switch to web audio...");
-        console.log(this.getAudio());
-        console.log(this.getAudio().played);
-        if(this.getAudio() != null && this.getAudio().played.length > 0) {
-            this.switchToWebAudio();
+        if(this.switchingCheckInterval == -1) {
+            this.switchingCheckInterval = setInterval(() => {
+                if (this.getAudio().currentTime >= this.switchToWebAudioAt) {
+                    this.switchToWebAudio();
+                    clearInterval(this.switchingCheckInterval);
+                }
+            }, 500);
         }
+
+        console.log("got the last %f seconds of audio", this.getFullBuffer().duration);
     }
 
     private debug(s : string) {

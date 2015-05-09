@@ -158,6 +158,8 @@ var GaplessTrack = (function () {
         this.bufferStartOffsetFromHTMLAudio = 0;
         this.onPrepareNextTrack = null;
         this.onEnded = null;
+        this.switchToWebAudioAt = Math.pow(2, 53) - 1; // a very large number
+        this.switchingCheckInterval = -1;
         this.hasAttemptedLoad = false;
         this.context = context;
         this.gainNode = gainNode;
@@ -189,6 +191,7 @@ var GaplessTrack = (function () {
         var request = new XMLHttpRequest();
         request.open('get', this.url, true);
         request.responseType = 'arraybuffer';
+        request.setRequestHeader("Range", "bytes=-" + 1024 * 1024); // request the last 500KB
         request.onload = function () {
             context.decodeAudioData(request.response, function (buffer) {
                 cb(buffer);
@@ -211,10 +214,10 @@ var GaplessTrack = (function () {
     GaplessTrack.prototype.switchToWebAudio = function () {
         this.debug("switching to web audio...");
         this.currentSourceNode = this.makeNewSourceNode();
-        console.log("context: %f, audio: %f", this.context.currentTime, this.getAudio().currentTime);
         this.bufferStartTime = this.context.currentTime;
         this.bufferStartOffsetFromHTMLAudio = this.getAudio().currentTime;
-        this.currentSourceNode.start(0, this.getAudio().currentTime);
+        console.log("current time %f/%f, switch at: %f (%f)", this.getAudio().currentTime, this.getAudio().duration, this.switchToWebAudioAt, this.getFullBuffer().duration);
+        this.currentSourceNode.start(0, this.getAudio().currentTime - this.switchToWebAudioAt);
         this.getAudio().pause();
         this.clearAudio();
         this.source = GaplessTrackSource.WebAudio;
@@ -225,14 +228,19 @@ var GaplessTrack = (function () {
         }
     };
     GaplessTrack.prototype.attemptSwitchToWebAudio = function () {
+        var _this = this;
+        this.switchToWebAudioAt = this.getAudio().duration - this.getFullBuffer().duration;
         // we can't switch to web audio unless we have actually played
         // the HTML5 audio for a few seconds to avoid the blip
-        this.debug("attempting to switch to web audio...");
-        console.log(this.getAudio());
-        console.log(this.getAudio().played);
-        if (this.getAudio() != null && this.getAudio().played.length > 0) {
-            this.switchToWebAudio();
+        if (this.switchingCheckInterval == -1) {
+            this.switchingCheckInterval = setInterval(function () {
+                if (_this.getAudio().currentTime >= _this.switchToWebAudioAt) {
+                    _this.switchToWebAudio();
+                    clearInterval(_this.switchingCheckInterval);
+                }
+            }, 500);
         }
+        console.log("got the last %f seconds of audio", this.getFullBuffer().duration);
     };
     GaplessTrack.prototype.debug = function (s) {
         console.log(this.url + ": " + s);
