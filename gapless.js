@@ -11,7 +11,7 @@ var GaplessPlaybackState;
 })(GaplessPlaybackState || (GaplessPlaybackState = {}));
 var GaplessPlayback = (function () {
     function GaplessPlayback() {
-        this.context = ("webkitAudioContext" in window) ? new window["webkitAudioContext"]() : new AudioContext();
+        this.context = new AudioContext();
         this.gainNode = this.context.createGain();
         this.gainNode.gain.value = 1;
         this.gainNode.connect(this.context.destination);
@@ -145,7 +145,7 @@ var GaplessPlayback = (function () {
         }
     };
     return GaplessPlayback;
-})();
+}());
 var GaplessTrackSource;
 (function (GaplessTrackSource) {
     GaplessTrackSource[GaplessTrackSource["HTMLAudioElement"] = 0] = "HTMLAudioElement";
@@ -187,17 +187,32 @@ var GaplessTrack = (function () {
     GaplessTrack.prototype.getFullBuffer = function () {
         return this.buf;
     };
+    GaplessTrack.prototype.loadHead = function (cb) {
+        var _this = this;
+        var options = {
+            method: 'HEAD'
+        };
+        fetch(this.url, options)
+            .then(function (res) {
+            if (res.redirected) {
+                _this.url = res.url;
+            }
+            cb();
+        });
+    };
     GaplessTrack.prototype.loadBuffer = function (context, cb) {
-        var request = new XMLHttpRequest();
-        request.open('get', this.url, true);
-        request.responseType = 'arraybuffer';
-        request.setRequestHeader("Range", "bytes=-" + 1024 * 1024); // request the last 500KB
-        request.onload = function () {
-            context.decodeAudioData(request.response, function (buffer) {
+        var options = {
+            headers: new Headers({
+                Range: "bytes=-" + 1024 * 1024
+            })
+        };
+        var request = fetch(this.url, options)
+            .then(function (res) { return res.arrayBuffer(); })
+            .then(function (res) {
+            return context.decodeAudioData(res, function (buffer) {
                 cb(buffer);
             });
-        };
-        request.send();
+        })["catch"](function (e) { return console.log('caught fetch error', e); });
     };
     GaplessTrack.prototype.makeNewSourceNode = function () {
         var _this = this;
@@ -263,11 +278,13 @@ var GaplessTrack = (function () {
             });
             this.audio.addEventListener("canplaythrough", function (e) {
                 _this.debug("HTML5 audio fully loaded");
-                _this.loadBuffer(_this.context, function (buf) {
-                    _this.state = GaplessPlaybackState.ReadyToSwitchToWebAudio;
-                    _this.debug("audio parsed");
-                    _this.setFullBuffer(buf);
-                    _this.attemptSwitchToWebAudio();
+                _this.loadHead(function () {
+                    _this.loadBuffer(_this.context, function (buf) {
+                        _this.state = GaplessPlaybackState.ReadyToSwitchToWebAudio;
+                        _this.debug("audio parsed");
+                        _this.setFullBuffer(buf);
+                        _this.attemptSwitchToWebAudio();
+                    });
                 });
             });
             this.audio.addEventListener("ended", function (e) {
@@ -357,5 +374,5 @@ var GaplessTrack = (function () {
         return this.state;
     };
     return GaplessTrack;
-})();
+}());
 //# sourceMappingURL=gapless.js.map

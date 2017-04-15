@@ -31,7 +31,7 @@ class GaplessPlayback {
     public onPlaybackUpdate : (info : GaplessPlaybackInfo) => void;
 
     constructor() {
-        this.context = ("webkitAudioContext" in window) ?  new window["webkitAudioContext"]() : new AudioContext();
+        this.context = new AudioContext();
         this.gainNode = this.context.createGain();
         this.gainNode.gain.value = 1;
 
@@ -241,17 +241,36 @@ class GaplessTrack {
         return this.buf;
     }
 
-    private loadBuffer(context : AudioContext, cb : (buf : AudioBuffer) => void) : void {
-        var request : XMLHttpRequest = new XMLHttpRequest();
-        request.open('get', this.url, true);
-        request.responseType = 'arraybuffer';
-        request.setRequestHeader("Range", "bytes=-" + 1024 * 1024); // request the last 500KB
-        request.onload = () => {
-            context.decodeAudioData(request.response, (buffer : AudioBuffer) => {
-                cb(buffer);
-            });
+    private loadHead(cb) : void {
+        var options = {
+            method: 'HEAD'
         };
-        request.send();
+
+        fetch(this.url, options)
+            .then((res: any) => { // res isn't really an 'any', but typescript has old 'Response' definitions
+                if (res.redirected) {
+                    this.url = res.url;
+                }
+
+                cb();
+            })
+    }
+
+    private loadBuffer(context : AudioContext, cb : (buf : AudioBuffer) => void) : void {
+        var options = {
+            headers: new Headers({
+                Range: "bytes=-" + 1024 * 1024
+            })
+        };
+
+        var request = fetch(this.url, options)
+            .then(res => res.arrayBuffer())
+            .then(res =>
+                context.decodeAudioData(res, (buffer : AudioBuffer) => {
+                    cb(buffer);
+                })
+            )
+            .catch(e => console.log('caught fetch error', e));
     }
 
     private makeNewSourceNode() : AudioBufferSourceNode {
@@ -298,7 +317,7 @@ class GaplessTrack {
 
         // we can't switch to web audio unless we have actually played
         // the HTML5 audio for a few seconds to avoid the blip
-        if(this.switchingCheckInterval == -1) {
+        if (this.switchingCheckInterval == -1) {
             this.switchingCheckInterval = setInterval(() => {
                 if (this.getAudio().currentTime >= this.switchToWebAudioAt) {
                     this.switchToWebAudio();
@@ -338,14 +357,17 @@ class GaplessTrack {
             this.audio.addEventListener("canplaythrough", (e:Event) => {
                 this.debug("HTML5 audio fully loaded");
 
-                this.loadBuffer(this.context, (buf:AudioBuffer) => {
-                    this.state = GaplessPlaybackState.ReadyToSwitchToWebAudio;
+                this.loadHead(() => {
+                    this.loadBuffer(this.context, (buf:AudioBuffer) => {
+                        this.state = GaplessPlaybackState.ReadyToSwitchToWebAudio;
 
-                    this.debug("audio parsed");
+                        this.debug("audio parsed");
 
-                    this.setFullBuffer(buf);
-                    this.attemptSwitchToWebAudio();
-                });
+                        this.setFullBuffer(buf);
+                        this.attemptSwitchToWebAudio();
+                    });
+                })
+
             });
 
             this.audio.addEventListener("ended", (e: Event) => {
