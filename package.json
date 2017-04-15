@@ -4,7 +4,7 @@
   "description": "Gapless audio playback using HTMLAudioElement and the Web Audio API",
   "main": "gapless.js",
   "dependencies": {
-    "typescript": "^1.5.0-beta",
+    "typescript": "^2.2.2",
     "uglify-js": "^2.4.21"
   },
   "devDependencies": {},
@@ -12,7 +12,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "uglify": "./node_modules/.bin/uglifyjs --compress --mangle --source-map gapless.min.js -o gapless.min.js -- gapless.js",
     "compile": "./node_modules/.bin/tsc --sourceMap gapless.ts",
-    "prepare-release" : "npm run-script compile && npm run-script uglify"
+    "prepare-release": "npm run-script compile && npm run-script uglify"
   },
   "repository": {
     "type": "git",
